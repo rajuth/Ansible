@@ -1,0 +1,26 @@
+---
+- name: Install and Configure Node_Exporter
+  hosts: mongo_servers
+  vars:
+       node_exp_setup: node_exporter-1.3.1.linux-amd64.tar
+       move_to_dir: node_exporter-1.3.1.linux-amd64
+       path: /mongodb/software
+  tasks:
+    - name: Unarchive Node_Exporter
+      unarchive:
+        src: "{{ node_exp_setup }}"
+        dest: "{{ path }}"
+    - name: Rename Dir of Node_Exporter
+      shell: mv "{{ path }}/{{ move_to_dir }}" "{{ path }}/node_exporter" && chown -R prometheus.prometheus "{{ path }}/node_exporter"
+    - name: install service
+      template:
+       src: node_exporter_service.j2
+       dest: /etc/systemd/system/node_exporter.service
+       owner: root
+       group: root
+       mode: 0755
+    - name: service always started
+      systemd:
+       name: node_exporter
+       state: started
+       enabled: yes
