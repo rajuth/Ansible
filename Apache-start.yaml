@@ -1,0 +1,30 @@
+---
+- name: start apache
+  hosts: ApacheSever
+  # ansible_user: root
+  #ansible_pass: linux
+  gather_facts: no
+
+  tasks:
+    - name: start apache using shell module
+      #become: yes
+      async: 10
+      poll: 0
+      shell:
+         "./catalina.sh start"
+      args:
+        chdir: "/opt/tomcat/bin"
+      register: fine
+      tags: start
+
+
+    - name: check the tomcat status if it is running or not
+      tags: status
+      wait_for:
+         host: "localhost"
+         port: 8080
+         delay: 10
+         timeout: 30
+         state: started
+         msg: "the tomcat service is not running"
+
