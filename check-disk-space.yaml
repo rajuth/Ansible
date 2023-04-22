@@ -1,0 +1,24 @@
+---
+- name: Check disk
+  #  hosts: prod
+  hosts: "{{ node }}"
+  # pass extra variable through the commnad with option -e
+  # You can run this playbook like : ansible-playbook check-disk-space.yaml -e "node=TRANS" 
+  # Here TRANS is host group in inventory file
+  # I have file host group like DB,Monitor,K8s nodes,K8s master
+  #  become: yes
+  gather_facts: no
+
+  tasks:
+    - name: check disk spce
+      shell: |
+         df -h
+         echo "==========du  -sch /opt/Log-Automation/Storage/*============== "
+         du  -sch /opt/Log-Automation/Storage/*
+      register: space
+
+    - debug:
+         msg:
+           - "{{ space.stdout_lines }}"
+           - =================================================================
+
