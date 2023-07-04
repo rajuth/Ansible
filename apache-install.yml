@@ -1,0 +1,126 @@
+---
+  - name: Install and Configure Apache/Httpd Webserver
+    hosts: client
+    become: yes
+   # become_user: apache
+    become_method: sudo 
+    
+    vars:
+      APACHE_WEB: /opt/web
+      APACHE_HOME: /opt/web/apache2
+      HTTPD_ARCHIVE: httpd-2.4.46.tar.gz
+      EXPAT_ARCHIVE: expat-2.2.10.tar.xz
+      APR_ARCHIVE: apr-1.7.0.tar.gz
+      APR_UTIL_ARCHIVE: apr-util-1.6.1.tar.gz
+      MOD_JK_ARCHIVE: tomcat-connectors-1.2.48-src.tar.gz
+    tasks:
+    - name: Install the 'Development tools' package group and required dependencies
+      yum: 
+        name: 
+          - "@Development tools"
+          - expat-devel
+          - pcre
+          - pcre-devel
+          - openssl-devel
+          - pcre-devel
+          - gcc
+          - libtool
+        state: latest
+    #  become_user:
+    - name: Create Directory To Store Software
+      become: yes
+      become_user: 
+      file: 
+        path: /opt/software
+        state: directory 
+        owner: apache
+        group: apache     
+        recurse: yes
+    - name: Create Web server Home Directory
+      become: yes
+      become_user:
+      file:  
+        path: '{{ APACHE_WEB }}'
+        state: directory
+        owner: apache
+        group: apache
+        recurse: yes
+    - name: Unarchive a Apache Setup files
+      unarchive:
+        src: httpd-2.4.46.tar.gz 
+        dest: /opt/software/
+    - name: Unarchive a Expat Setup files
+      unarchive:
+        src: expat-2.2.10.tar.xz 
+        dest: /opt/software/
+    - name: Unarchive a APR Setup files
+      unarchive:
+        src: apr-1.7.0.tar.gz 
+        dest: /opt/software/
+    - name: Unarchive a APR-UTIL Setup files
+      unarchive:
+        src: apr-util-1.6.1.tar.gz 
+        dest: /opt/software/
+    - name: Unarchive a Mod_JK Setup files
+      unarchive:
+        src: tomcat-connectors-1.2.48-src.tar.gz 
+        dest: /opt/software/
+    - name: Compile and install expat
+      shell:
+        cmd: cd /opt/software/expat-2.2.10 && ./configure --prefix=/opt/software/expat && make && make install
+    - name: Check and Verify expat versions
+      command: /opt/software/expat/bin/xmlwf -v
+      register: expat
+    - debug: var=expat.stdout_lines
+    - name: Prepare and Compile apache
+      shell: 
+        cmd: cd /opt/software && 
+                 mv apr-1.7.0 httpd-2.4.46/srclib/apr &&
+                 mv apr-util-1.6.1 httpd-2.4.46/srclib/apr-util &&
+                 cd httpd-2.4.46 && 
+                 ./buildconf && 
+                 ./configure --enable-ssl --enable-so --enable-mpms-shared=all --with-included-apr --with-expat=/var/tmp/expat --prefix={{ APACHE_WEB }}/apache2 && 
+                 make && 
+                 make install
+    - name: Check and verify Apache version
+      command: '{{ APACHE_WEB }}/apache2/bin/httpd -V'
+      register: apache_ver
+    - debug: var=apache_ver.stdout_lines   
+    - name: Create Service to start and stop apache
+      template:
+        src: httpd.service.j2
+        dest: /etc/systemd/system/httpd.service
+      become_user:     
+    - name: Create httpd command
+      become: yes
+      become_user:
+      lineinfile: 
+        path: /etc/profile.d/httpd.sh
+        line: pathmunge {{ APACHE_WEB }}/apache2/bin
+        owner: apache
+        group: apache
+        create: yes
+    - name: Enable and Start apache/httpd service
+      shell:
+        cmd: sudo systemctl daemon-reload &&
+             sudo systemctl start httpd  &&
+             sudo systemctl enable httpd 
+    - name: Compile Mod_JK connector
+      shell:
+        cmd:  cd /opt/software/tomcat-connectors-1.2.48-src/native &&
+              ./configure -with-apxs={{ APACHE_HOME }}/bin/apxs &&
+              make &&
+              make install 
+    - name: Check Mod_JK available or Not
+      command: ls -lhrt {{ APACHE_HOME }}/modules/mod_jk.so
+    - name: Copy Apache config File
+      template:
+          src: httpd.conf.j2
+          dest: /opt/web/apache2/conf/httpd.conf
+          backup: yes  
+    - name: Copy Mod_JK worker file
+      template:
+          src: workers.properties.j2
+          dest: /opt/web/apache2/conf/extra/workers.properties
+    - name: restart apache/httpd service
+      command: sudo systemctl restart httpd
